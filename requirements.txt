@@ -1,0 +1,11 @@
+sentence-transformers
+google.generativeai
+langgraph  
+pydantic
+supabase 
+pandas
+matplotlib
+seaborn
+playwright
+fpdf
+reportlab
