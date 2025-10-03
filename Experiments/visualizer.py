@@ -16,7 +16,9 @@ from langchain.agents import AgentExecutor, create_tool_calling_agent
 # --- 1. SETUP & CONFIGURATION ---
 
 # Load environment variables
+
 load_dotenv()
+
 api_key = os.getenv("GOOGLE_API_KEY")
 
 if not api_key:

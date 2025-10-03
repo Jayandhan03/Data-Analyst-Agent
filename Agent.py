@@ -7,19 +7,20 @@ from llm import llm_model
 from pydantic import BaseModel,Field
 from typing import List, Any, Literal, Optional
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-from Prompts import supervisor_prompt,PreprocessingPlanner_prompt,cleaner_prompt,validation_prompt,Reporter_prompt
+from Prompts import supervisor_prompt,PreprocessingPlanner_prompt,cleaner_prompt,validation_prompt,Reporter_prompt,VISUALIZATION_PROMPT
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.agents import AgentExecutor, create_tool_calling_agent
-from Toolkit.Tools import python_repl_ast,eda_fact_sheet,text_to_pdf
+from Toolkit.Tools import python_repl_ast,eda_fact_sheet
 from Guardrails.Preprocessing import StructuredPlanOutput
 from Guardrails.cleaner import CleaningSummary  
 from Guardrails.validation import ValidationResult
 from Guardrails.report import BusinessReport
+from Guardrails.visualizer import VisualizationReport
 from langchain.output_parsers import PydanticOutputParser,OutputFixingParser
 
 
 class Router(BaseModel):
-    next: Literal["PreprocessingPlanner_node","Cleaner_node","Validation_node","Reporter_node",END]= Field(description="The next node to route to. Must be one of the available nodes.")
+    next: Literal["PreprocessingPlanner_node","Cleaner_node","Validation_node","Reporter_node","visualizer_node",END]= Field(description="The next node to route to. Must be one of the available nodes.")
     reasoning: str = Field(description="A short reasoning for the decision made.")
 
 class AgentStateModel(BaseModel):
@@ -29,6 +30,7 @@ class AgentStateModel(BaseModel):
     Preprocessing: Optional[List[dict]] = None
     validation: Optional[List[dict]] = None
     Report: Optional[List[dict]] = None
+    Visualizations: Optional[List[dict]] = None
     Path: Optional[str] = None
     next: Optional[str] = None
     current_reasoning: Optional[str] = None
@@ -37,32 +39,46 @@ class DataAnalystAgent:
     def __init__(self):
         self.llm_model = llm_model
 
-    def supervisor_node(self,state:AgentStateModel) -> Command[Literal["PreprocessingPlanner_node","Cleaner_node","Validation_node","Reporter_node", END]]:
+    def supervisor_node(self,state:AgentStateModel) -> Command[Literal["PreprocessingPlanner_node","Cleaner_node","Validation_node","Reporter_node","visualizer_node", END]]:
+
+        """
+        The central router of the workflow.
+        It evaluates the current state and the last message to decide the next action.
+        This node is designed to be highly token-efficient by creating a lean summary of the state
+        instead of passing the full, verbose state objects to the LLM.
+        """
 
         print("**************************below is my state right after entering****************************")
+
         print(state)
 
-        human_instruction = (
-        f"Here is the current state for your evaluation:\n"
-        f"- Analysis: {state.Analysis}\n"
-        f"- Preprocessing: {state.Preprocessing}\n"
-        f"- Validation: {state.validation}\n"
-        f"- Report: {state.Report}"
-    )
-        
+        print("************************** SUPERVISOR: EVALUATING STATE ****************************")
+
+        state_summary = (
+            f"Current Workflow Status:\n"
+            f"- Analysis Plan Generated: {'Yes' if state.Analysis else 'No'}\n"
+            f"- Preprocessing Attempted: {'Yes' if state.Preprocessing else 'No'}\n"
+            f"- Validation Status: {state.validation[0]['final_answer']['status'] if state.validation else 'Not Run'}\n"
+            f"- Report Generated: {'Yes' if state.Report else 'No'}\n"
+            f"- Visualizations Generated: {'Yes' if state.Visualizations else 'No'}\n"
+        )
+
         messages_for_llm = [
             SystemMessage(content=supervisor_prompt),
-            HumanMessage(content=human_instruction),
+            HumanMessage(content=state_summary),
         ]
         
         if state.messages:
             last_message = state.messages[-1]
-            messages_for_llm.append(last_message)
-            print(f"--- Attaching last message ---\nType: {type(last_message).__name__}\nContent: {last_message.content}\n----------------------------------")
+            # Add a prefix to clearly label the last message for the LLM
+            last_message_content = f"Last Event:\nThe last node to run was '{last_message.name}'. It reported the following:\n---\n{last_message.content}\n---"
+            messages_for_llm.append(HumanMessage(content=last_message_content))
+            print(f"--- Attaching last event from '{last_message.name}' ---")
+        else:
+            # Handle the very first run where there are no messages
+            messages_for_llm.append(HumanMessage(content="Last Event: None. This is the first step of the workflow."))
 
         print("***********************Invoking LLM for routing decision************************")
-        
-        # response = self.llm_model.with_structured_output(Router).invoke(messages_for_llm)
 
         parser = PydanticOutputParser(pydantic_object=Router)
 
@@ -108,29 +124,6 @@ class DataAnalystAgent:
                         "current_reasoning": fallback_msg
                     }
                 )
-
-        # Invoke chain with error-aware retries
-        # response = chain.invoke(messages_for_llm)
-
-        # chain = self.llm_model.with_structured_output(Router).with_retry(
-        #     stop_after_attempt=3
-        # )
-        # Now invoke the complete, resilient chain
-        # try:
-        # # First attempt
-        #   response = chain.invoke(messages_for_llm)
-
-        # except Exception as e:
-        #     # Catch runtime errors (rate limit, timeout, etc.)
-        #     error_msg = (
-        #         f"Previous attempt failed due to runtime error: {str(e)}. "
-        #         f"Please try again strictly following schema: {Router.schema_json()}"
-        #     )
-        #     print(f"--- Runtime error encountered, re-prompting LLM ---\n{error_msg}")
-            
-        #     # Retry by injecting the error into messages
-        #     response = chain.invoke(messages_for_llm + [HumanMessage(content=error_msg)])
-
         
         goto = response.next
         
@@ -242,83 +235,11 @@ class DataAnalystAgent:
             goto="supervisor",
         )
 
-        # # Build a robust chain with retry
-        # chain = self.llm_model | fixing_parser
-        # chain = chain.with_retry(stop_after_attempt=3)
-
-        # # 3. Wrap the LLM execution with retry + structured output enforcement
-        # # chain = self.llm_model.with_structured_output(StructuredPlanOutput).with_retry(
-        # #     stop_after_attempt=3
-        # # )
-
-        # # Try-catch with LLM-aware error injection
-
-        # messages_for_llm = ({
-        #             "input": task_prompt,
-        #             "chat_history": []     
-        #         })
-        # try:
-        #     response = chain.invoke(messages_for_llm)
-        # except Exception as e:
-        #     error_msg = (
-        #         f"Previous attempt failed due to runtime error: {str(e)}. "
-        #         f"Please try again strictly following schema: {StructuredPlanOutput.schema_json()}"
-        #     )
-        #     print(f"--- Runtime error encountered, re-prompting LLM ---\n{error_msg}")
-        #     response = chain.invoke(messages_for_llm + [HumanMessage(content=error_msg)])
-
-            # result = agent_executor.invoke({
-            #         "input": task_prompt,
-            #         "chat_history": []     
-            #     })
-        
-        # 4. Parse the agent's final string output using the Pydantic parser
-        # This acts as your guardrail. If the output is not valid JSON, it will fail here.
-        # try:
-        #     final_output_string = result.get("output", "")
-        #     parsed_output: StructuredPlanOutput = parser.parse(final_output_string)
-            
-        #     # Extract the components from the parsed object
-        #     # --- THIS LINE IS CORRECTED ---
-        #     plan_dict = {"plan": [step.model_dump() for step in parsed_output.plan]}
-        #     # ---------------------------
-        #     summary_str = f"{parsed_output.summary}\n{parsed_output.details}"
-
-        # except Exception as e:
-        #     # Handle cases where the LLM failed to produce valid JSON
-        #     print(f"--- FAILED TO PARSE AGENT OUTPUT ---\nError: {e}")
-        #     print(f"Raw Output:\n{result.get('output')}")
-        #     # Fallback or error state
-        #     return Command(
-        #         update={
-        #             "messages": state.messages[-1:] + [AIMessage(content="Error: The analysis agent failed to produce a valid preprocessing plan.", name="Analyzer_node_Error")],
-        #             "Analysis": [{"error": "Parsing failed", "output": result.get('output')}] 
-        #         },
-        #         goto="supervisor",
-        #     )
-        
-        # agent_dict_output = {"final_answer": result.get("output")}
-
-        # parsed = summarize_tool_output(agent_dict_output,self.llm_model)
-
-        # parsed_str = f"{parsed.summary}\n{parsed.details}"
-
-        # 5. Update the state with the structured and summarized data
-        # return Command(
-        #     update={
-        #         # Update messages with the human-readable summary
-        #         "messages": state.messages[-1:] + [AIMessage(content=summary_str, name="PreprocessingPlanner_node")],
-        #         # Update Analysis with the structured, machine-readable plan
-        #         "Analysis": [{"final_answer": plan_dict}]
-        #     },
-        #     goto="supervisor",
-        # )
-
     def Cleaner_node(self, state: AgentStateModel) -> Command[Literal['supervisor']]:
 
         print("*****************called cleaner node************")
 
-        Analysis = state.Analysis
+        Analysis = state.Analysis[0]['final_answer']['plan']
 
         Path = state.Path
 
@@ -327,10 +248,24 @@ class DataAnalystAgent:
 
         fixing_parser = OutputFixingParser.from_llm(parser=parser, llm=self.llm_model)
 
+        # Check for validation feedback and construct a message for the agent.
+        validation_feedback = ""
+        if state.validation and 'final_answer' in state.validation[0] and state.validation[0]['final_answer']['status'] == 'FAILURE':
+            failure_message = state.validation[0]['final_answer']['message']
+            validation_feedback = (
+                f"\n**ATTENTION: A previous cleaning attempt failed validation.**\n"
+                f"**Validation Feedback:** '{failure_message}'\n"
+                f"You MUST write new Python code that specifically addresses these failures."
+            )
+            print(f"--- Found validation failure. Injecting feedback into prompt. ---\n")
+
         task_prompt = (
-        f"""Find the preprocessing steps for every column here : {Analysis} and follow this {cleaner_prompt} to the letter.
-        The dataframe is in this path: {Path} modify the data in this path directly."""
-    )
+            f"Your mission is to execute the following preprocessing plan: {Analysis}."
+            f"{validation_feedback}\n"  
+            f"Follow your core instructions from the system prompt: {cleaner_prompt} to the letter.\n"
+            f"The dataframe is at this path: {Path}. Modify the data in this path directly."
+        )
+
         print(f"--- Sending this direct task to the agent ---\n{task_prompt}\n---------------------------------------------")
 
         system_prompt = ChatPromptTemplate.from_messages(
@@ -383,7 +318,8 @@ class DataAnalystAgent:
                 return Command(
                     update={
                         "messages": state.messages[-1:] + [AIMessage(content=parsed_str, name="cleaner_node")],
-                        "Preprocessing": [{"final_answer": final_output_string}]
+                        "Preprocessing": [{"final_answer": final_output_string}],
+                        "validation" : None
                     },
                     goto="supervisor",
                 )
@@ -410,26 +346,7 @@ class DataAnalystAgent:
             goto="supervisor",
         )
 
-        # result = agent_executor.invoke({
-        #         "input": task_prompt,
-        #         "cleaner_prompt": cleaner_prompt,
-        #         "chat_history": []     
-        #     })
-        
-        # agent_dict_output = {"final_answer": result.get("output")}
 
-        # parsed = summarize_tool_output(agent_dict_output,self.llm_model)
-
-        # parsed_str = f"{parsed.summary}\n{parsed.details}"
-
-        # return Command(
-        #     update={
-        #         "messages": state.messages[-1:] + [AIMessage(content=parsed_str, name="cleaner_node")],
-        #         "Preprocessing": [agent_dict_output] 
-        #     },
-        #     goto="supervisor",
-        # )
-    
     def Validation_node(self, state: AgentStateModel):
         print("*****************INVOKING VALIDATION NODE************")
 
@@ -526,25 +443,6 @@ class DataAnalystAgent:
             goto="supervisor",
         )
 
-        # Invoke the agent with the clear separation of roles
-        # result = agent_executor.invoke({
-        #         "input": task_input,
-        #         "validation_prompt": validation_prompt, # The detailed playbook is passed to the system prompt
-        #         "chat_history": []
-        #     })
-        
-        # # ... The rest of your function to process and return the result remains the same ...
-        # agent_dict_output = {"final_answer": result.get("output")}
-        # parsed = summarize_tool_output(agent_dict_output, self.llm_model)
-        # parsed_str = f"{parsed.summary}\n{parsed.details}"
-
-        # return Command(
-        #     update={
-        #         "messages": state.messages[-1:] + [AIMessage(content=parsed_str, name="Validation_node")],
-        #         "validation": [agent_dict_output]
-        #     },
-        #     goto="supervisor",
-        # )
     
     def Reporter_node(self, state: AgentStateModel) -> Command[Literal['supervisor']]:
         print("*****************called Reporter node************")
@@ -638,41 +536,101 @@ class DataAnalystAgent:
         )
 
 
-        # Analyzer_agent = create_tool_calling_agent(
-        #     llm=self.llm_model,
-        #     tools=[eda_fact_sheet,python_repl_ast],
-        #     prompt=system_prompt
-        # )
+    def visualizer_node(self, state: AgentStateModel) -> Command[Literal['supervisor']]:
+        """
+        This node directs an agent to perform EDA and generate 10 business-focused visualizations.
+        It enforces a structured JSON output for the final report and includes retry logic for parsing.
+        """
+        print("***************** called Visualizer node ************")
 
-        # tools = [eda_fact_sheet,python_repl_ast]
+        df_path = state.Path
+        # You can also get specific instructions from the state if needed
+        # instructions = state.Instructions
 
-        # agent_executor = AgentExecutor(
-        #     agent=Analyzer_agent,
-        #     tools=tools,
-        #     verbose=True,
-        #     handle_parsing_errors=True,
-        #     return_intermediate_steps=True
-        # )
+        # 1. Instantiate the parser for our structured visualization output
+        parser = PydanticOutputParser(pydantic_object=VisualizationReport)
 
-        # result = agent_executor.invoke({
-        #         "input": task_prompt,
-        #         "df_path": df_path,
-        #         "chat_history": []     
-        #     })
-        
-        # agent_dict_output = {"final_answer": result.get("output")}
+        fixing_parser = OutputFixingParser.from_llm(parser=parser, llm=self.llm_model)
 
-        # parsed = summarize_tool_output(agent_dict_output,self.llm_model)
+        # The main prompt that guides the agent's entire process
+        task_prompt = VISUALIZATION_PROMPT
 
-        # parsed_str = f"{parsed.summary}\n{parsed.details}"
+        print(f"--- Sending this direct task to the agent ---\n{task_prompt}\n---------------------------------------------")
 
-        # return Command(
-        #     update={
-        #         "messages": state.messages[-1:] + [AIMessage(content=parsed_str, name="Reporter_node")],
-        #         "Report": [agent_dict_output] 
-        #     },
-        #     goto="supervisor",
-        # )
+        system_prompt = ChatPromptTemplate.from_messages([
+            ("system",
+            "You are a Data Visualization Specialist. You have access to `eda_fact_sheet(df_path)` for initial recon and `python_repl_ast(query)` for generating and saving plots. "
+            "The CSV is at this path: {df_path}. "
+            "Your mission is to autonomously analyze the data and produce a series of 10 visualizations as instructed. "
+            f"Follow these instructions precisely: {VISUALIZATION_PROMPT}"),
+            ("placeholder", "{chat_history}"),
+            ("human", "{input}"),
+            MessagesPlaceholder(variable_name="agent_scratchpad")
+        ])
+
+        visualizer_agent = create_tool_calling_agent(
+            llm=self.llm_model,
+            tools=[eda_fact_sheet, python_repl_ast],
+            prompt=system_prompt
+        )
+
+        agent_executor = AgentExecutor(
+            agent=visualizer_agent,
+            tools=[eda_fact_sheet, python_repl_ast],
+            verbose=True,
+            handle_parsing_errors=True,
+            return_intermediate_steps=True
+        )
+
+        # 2. Wrap execution in a retry loop for robust parsing
+        max_attempts = 3
+        attempt = 0
+        while attempt < max_attempts:
+            attempt += 1
+            try:
+                result = agent_executor.invoke({
+                    "input": task_prompt,
+                    "df_path": df_path,
+                    "chat_history": []
+                })
+
+                # Try parsing the final output using the fixing parser
+                final_output_string = result.get("output", "")
+                parsed_output: VisualizationReport = fixing_parser.parse(final_output_string)
+
+                # Successfully parsed -> create a summary and update the state
+                summary_str = f"Successfully generated a report with {len(parsed_output.visualizations)} visualizations."
+
+                return Command(
+                    update={
+                        "messages": state.messages[-1:] + [AIMessage(content=summary_str, name="Visualizer_node")],
+                        # Store the full structured report of visualizations
+                        "Visualizations": [{"final_answer": parsed_output.model_dump()}]
+                    },
+                    goto="supervisor",
+                )
+
+            except Exception as e:
+                error_msg = (
+                    f"Attempt {attempt} failed due to a parsing error: {str(e)}. "
+                    f"You MUST provide a final answer that is a valid JSON object. Please strictly follow this schema: "
+                    f"{VisualizationReport.model_json_schema()}"
+                )
+                print(f"--- Runtime/Parsing error encountered ---\n{error_msg}")
+                # Inject the error and schema into the prompt for the next retry
+                task_prompt = task_prompt + "\n\n" + error_msg
+
+        # If all attempts fail, fallback to the supervisor with an error message
+        return Command(
+            update={
+                "messages": state.messages[-1:] + [
+                    AIMessage(content="Error: The visualizer agent failed to produce a valid report after multiple attempts.",
+                            name="Visualizer_node_Error")
+                ],
+                "Visualizations": [{"error": "Parsing failed after all retries"}]
+            },
+            goto="supervisor",
+        )
     
-#Data is about sales,provide the data overview along with the preprocessing steps needed to perform EDA , here's the path path = r"D:\Code Assistant\retail_sales_dataset.csv"
-#dbuser1 user and pass for cluster
+"""Data is about sales,provide the data overview along with the preprocessing steps needed to perform EDA , here's the path path = D:\Code Assistant\Coffe_sales.csv """
+
