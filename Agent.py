@@ -632,5 +632,5 @@ class DataAnalystAgent:
             goto="supervisor",
         )
     
-"""Data is about sales,provide the data overview along with the preprocessing steps needed to perform EDA , here's the path path = D:\Code Assistant\Coffe_sales.csv """
+"""Data is about sales,provide the data overview along with the preprocessing steps needed to perform EDA , here's the path path = D:\Code Assistant\car_sales_data.csv """
 
