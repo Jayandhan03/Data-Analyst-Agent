@@ -30,6 +30,7 @@ def main():
     graph.add_node("Cleaner_node", agent.Cleaner_node)
     graph.add_node("Validation_node", agent.Validation_node)
     graph.add_node("Reporter_node", agent.Reporter_node)
+    graph.add_node("visualizer_node", agent.visualizer_node)
 
     graph.add_edge(START, "supervisor")
     
