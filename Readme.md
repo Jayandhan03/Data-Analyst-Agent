@@ -1,3 +1,6 @@
+1)API key -AIzaSyB5JdNGdITOQ1jdHsR0kNf2NVShB5IdO-A
+2)api key - AIzaSyBNJgaYFwkZ1cPPKHu6193DqeX3x-k7rjk
+
 Project Success Metrics: The Autonomous AI Data Analyst
 
 The primary goal of this project is to create an autonomous agent that can reliably replicate the workflow of a junior data analyst, transforming a raw dataset into a strategic business report with minimal human intervention.
