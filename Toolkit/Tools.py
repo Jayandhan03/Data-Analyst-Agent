@@ -5,8 +5,6 @@ from pydantic import BaseModel, Field
 import pandas as pd
 from typing import Optional
 
-
-
 class CleaningToolInput(BaseModel):
     query: str = Field(..., description="A valid pandas code snippet that modifies the 'df' DataFrame.")
     path: str = Field(..., description="Full path to the dataset file (CSV, Excel, etc.) that will be modified.")
