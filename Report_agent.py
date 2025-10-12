@@ -4,6 +4,8 @@ from llm import llm_model
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from Prompts import Reporter_prompt
+import time
+
 
 load_dotenv()
 
@@ -23,13 +25,11 @@ def Report_agent(df_path: str):
         ]
     )
 
-    Instructions = "Data is about sales, perform the EDA , here's the path = {path}"
-
     task_prompt = (
-            f"Find the instructions given by the user here : {Instructions} and follow this {Reporter_prompt} to the letter."
+            f"Follow this {Reporter_prompt} to the letter and access the data from here {df_path}"
         )
 
-    Analyzer_agent = create_tool_calling_agent(
+    reporter_agent = create_tool_calling_agent(
                 llm=llm_model,
                 tools=[eda_fact_sheet,python_repl_ast],
                 prompt=system_prompt
@@ -37,20 +37,54 @@ def Report_agent(df_path: str):
 
     tools = [eda_fact_sheet,python_repl_ast]
 
-
-
     agent_executor = AgentExecutor(
-                agent=Analyzer_agent,
+                agent=reporter_agent,
                 tools=tools,
                 verbose=True,
                 handle_parsing_errors=True,
                 return_intermediate_steps=True
             )
+    
+    max_attempts = 3
+    attempt = 0
+    
+    while attempt < max_attempts:
+        attempt += 1
+        print(f"--- Starting Report Generation, Attempt {attempt} of {max_attempts} ---")
 
-    result = agent_executor.invoke({
-                    "input": task_prompt,
-                    "df_path": df_path,
-                    "chat_history": []     
-                })
-    return result
+        try:
+            result = agent_executor.invoke({
+                            "input": task_prompt,
+                            "df_path": df_path,
+                            "chat_history": []     
+                        })
+            
+            if result and "output" in result and result["output"]:
+                print(f"--- Report Generation successful on Attempt {attempt} ---")
+                return result # Return the entire successful result dictionary
+            else:
+                # This handles cases where the agent runs but produces no output content
+                raise ValueError("Agent executed successfully but produced an empty output.")
+            
+        except Exception as e:
+            # 3. On failure, create an error message for the next attempt
+            error_msg = (
+                f"Attempt {attempt} failed with the following error: {str(e)}. "
+                f"Please analyze the error and your previous steps, then try again. "
+                "Ensure you call the `eda_fact_sheet` tool first and then generate the report based on its findings."
+            )
+            print(f"--- Runtime error encountered ---\n{error_msg}")
+
+            # Prepend the error to the prompt for the next retry
+            task_prompt = (
+                f"Your previous attempt failed with this error: {error_msg}. "
+                f"Please correct your approach and try again. Here is the original task:\n---\n{task_prompt}"
+            )
+            
+            time.sleep(5) # Optional delay before retrying
+
+    # 4. If all attempts fail, return an error message
+    error_message = f"Error: Report agent failed to generate a report for the dataset at '{df_path}' after {max_attempts} attempts. Please check the data and agent configuration."
+    print(error_message)
+    return {"error": error_message, "output": "Failed to generate report."}   
 

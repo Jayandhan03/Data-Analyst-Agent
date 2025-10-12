@@ -33,7 +33,6 @@ def main():
     
     # Compile workflow
     app = graph.compile()
-
     # 3️⃣ Run the workflow from START with the initialized state
     final_state = app.invoke(initial_state)
 
