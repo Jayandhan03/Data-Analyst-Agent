@@ -5,282 +5,282 @@ import time
 import re
 import traceback
 import shutil
+import tempfile
+import base64
+import concurrent.futures
+
 from langgraph.graph import START, StateGraph, END
 
 # --- Import Agent Logic ---
-# Note: Ensure these files are in the same directory or your Python path
 from Cleaner_Agent import DataAnalystAgent, AgentStateModel
 from Report_agent import Report_agent
 from Visualizer_agent import Visualizer_agent
 
+# --- Matplotlib Backend Fix ---
+import matplotlib
+matplotlib.use('Agg')
+
 # --- Streamlit Page Configuration ---
 st.set_page_config(
-    page_title="AI Data Science Pipeline",
-    page_icon="✨",
+    page_title="AI Data Analyst",
+    page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- Custom CSS for a Professional & Impressive UI ---
+# --- Custom CSS for an Extremely Impressive and Cool UI ---
 st.markdown("""
 <style>
-    /* Main app background */
+    /* Main App Background */
+    body {
+        color: #E0E0E0; /* Light grey text */
+        background-color: #0F172A; /* Deep navy blue */
+    }
     .main {
-        background-color: #F0F2F6;
+        background-color: #0F172A;
     }
 
-    /* Page Title */
-    h1 {
-        color: #1E3D59;
-        font-family: 'Georgia', serif;
+    /* Page Title & Headers */
+    h1, h2, h3 {
+        font-family: 'Roboto', sans-serif;
         font-weight: bold;
         text-align: center;
     }
-    
-    /* Markdown Description */
-    .st-emotion-cache-16txtl3 > p {
-        text-align: center;
-        color: #4A4A4A;
-        font-size: 1.1rem;
+    h1 {
+        color: #FFFFFF;
+        text-shadow: 2px 2px 8px rgba(0, 255, 255, 0.5);
+    }
+    h3 {
+        color: #A0AEC0; /* Lighter grey for subtitle */
     }
 
     /* Sidebar Styling */
     .st-sidebar {
-        background-color: #FFFFFF;
-        border-right: 2px solid #E0E0E0;
+        background-color: #1E293B; /* Slightly lighter navy */
+        border-right: 2px solid #334155;
     }
     .st-sidebar h2 {
-        color: #1E3D59;
+        color: #FFFFFF;
+        text-align: left;
     }
 
-    /* Main Content Headers */
-    .st-emotion-cache-10trblm h2 {
-        color: #1E3D59;
-        border-bottom: 2px solid #FF6E40;
-        padding-bottom: 10px;
-    }
-
-    /* Start Button */
+    /* Start Button & Interactive Elements */
     .stButton>button {
-        background-image: linear-gradient(to right, #FF6E40 0%, #FF9E80 51%, #FF6E40 100%);
-        color: white;
-        border-radius: 12px;
+        color: #FFFFFF;
+        background-image: linear-gradient(45deg, #3B82F6 0%, #8B5CF6 100%);
         border: none;
+        border-radius: 12px;
         padding: 15px 30px;
         font-size: 18px;
         font-weight: bold;
-        transition: 0.5s;
-        background-size: 200% auto;
-        box-shadow: 0 0 20px #eee;
-        width: 100%;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px 0 rgba(59, 130, 246, 0.4);
     }
     .stButton>button:hover {
-        background-position: right center;
-        color: #fff;
-        text-decoration: none;
-        border: none;
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px 0 rgba(139, 92, 246, 0.5);
     }
 
-    /* File Uploader */
-    .stFileUploader {
-        border: 2px dashed #1E3D59;
+    /* Card Layout for Content */
+    .st-emotion-cache-r421ms { /* Streamlit's default container class */
+        background-color: #1E293B;
+        border: 2px solid transparent;
+        border-image: linear-gradient(45deg, #3B82F6, #8B5CF6) 1;
         border-radius: 12px;
+        box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.3);
         padding: 25px;
-        background-color: #FAFAFA;
+        transition: all 0.3s ease;
+    }
+    .st-emotion-cache-r421ms:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 30px 0 rgba(139, 92, 246, 0.4);
     }
 
-    /* Container & Tab Styling */
-    .st-emotion-cache-r421ms, .stTabs {
+    /* Custom Class for Empty State */
+    .empty-state {
+        text-align: center;
+        padding: 40px;
+        border: 2px dashed #334155;
         border-radius: 12px;
-        box-shadow: 0 4px 8px 0 rgba(0,0,0,0.1);
-        padding: 15px;
     }
-    
-    /* Status Messages */
-    .stAlert {
-        border-radius: 8px;
+    .empty-state h2 {
+        color: #FFFFFF;
     }
+    .empty-state p {
+        color: #A0AEC0;
+        font-size: 1.1rem;
+    }
+
+    /* Custom Class for Live Status Log */
+    .status-log {
+        background-color: #1E293B;
+        border-radius: 12px;
+        padding: 20px;
+        font-family: 'Courier New', Courier, monospace;
+        color: #E0E0E0;
+    }
+
 </style>
 """, unsafe_allow_html=True)
 
 
-def main():
-    """
-    Main function to run the Streamlit application.
-    Orchestrates the data pipeline: Clean -> Report -> Visualize.
-    """
-    st.title("🚀 AI-Powered Data Science Pipeline")
-    st.markdown("From Raw Data to Actionable Insights. Upload your data, provide instructions, and let a team of AI agents deliver a complete analysis.")
-
-    # --- Sidebar for User Inputs ---
-    with st.sidebar:
-        st.image("https://i.imgur.com/g0fGZ2Q.png", width=80)
-        st.header("⚙️ Pipeline Configuration")
-        
-        uploaded_file = st.file_uploader(
-            "1. Upload Your Data",
-            type=["csv", "xlsx"],
-            help="Upload a CSV or Excel file for analysis."
-        )
-        
-        instructions = st.text_area(
-            "2. Define Cleaning Instructions",
-            height=150,
-            placeholder="e.g., 'Handle missing sales values with the mean. Remove duplicates. Ensure OrderDate is a datetime.'"
-        )
-        
-        start_button = st.button("✨ Run Full Pipeline")
-
-    # --- Main Content Area for Data Preview and Reports ---
-    col1, col2 = st.columns((2, 1))
-
-    with col2:
-        st.header("📊 Data Preview")
-        preview_container = st.container(border=True, height=700)
-        if uploaded_file is not None:
-            uploaded_file.seek(0)
+# --- HELPER FUNCTIONS ---
+def cleanup_session_files():
+    """Deletes the temporary directory and clears associated session state keys."""
+    if 'temp_dir_path' in st.session_state and st.session_state.temp_dir_path:
+        temp_dir = st.session_state.temp_dir_path
+        if os.path.exists(temp_dir):
             try:
-                df = pd.read_csv(uploaded_file, nrows=100) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file, nrows=100)
-                preview_container.dataframe(df.head())
+                shutil.rmtree(temp_dir)
             except Exception as e:
-                preview_container.error(f"Error reading file: {e}")
-        else:
-            preview_container.info("Upload a file to see a preview of your data here.")
+                print(f"Error removing temp directory {temp_dir}: {e}")
+    keys_to_clear = ['temp_dir_path', 'pipeline_run_complete', 'generated_image_paths', 'final_report']
+    for key in keys_to_clear:
+        st.session_state.pop(key, None)
 
-    output_container = col1.container()
-    
-    if 'pipeline_started' not in st.session_state:
-        st.session_state.pipeline_started = False
+@st.cache_data
+def get_image_as_base64(path):
+    """Reads an image file and returns its Base64 encoded string."""
+    with open(path, "rb") as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
 
-    if start_button or st.session_state.pipeline_started:
-        if not uploaded_file or not instructions:
-            st.warning("Please upload a file and provide instructions before starting.")
+def display_empty_state():
+    """Shows a visually appealing message when no file is uploaded."""
+    st.markdown(
+        """
+        <div class="empty-state">
+            <h2>Welcome to the AI Data Analyst</h2>
+            <p>Upload your data and provide instructions in the sidebar to begin.</p>
+            <p>Let's turn your raw data into stunning insights! ✨</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+# --- MAIN APP ---
+def main():
+    # --- HEADER ---
+    st.title("🤖 AI Data Analyst")
+    st.markdown("<h3>Derive actionable insights from raw data in minutes from a specialized team of AI agents</h3>", unsafe_allow_html=True)
+    st.write("")
+
+    # --- SIDEBAR ---
+    with st.sidebar:
+        st.header("⚙️ Pipeline Configuration")
+        uploaded_file = st.file_uploader("1. Upload Your Data File", type=["csv", "xlsx"])
+        instructions = st.text_area("2. Describe Your Analysis Goal", height=150, placeholder="e.g., 'Analyze monthly sales trends and identify top-performing products.'")
+        
+        col1, col2 = st.columns(2)
+        start_button = col1.button("✨ Run Analysis", type="primary")
+        if col2.button("🧹 New Analysis"):
+            cleanup_session_files()
+            st.success("Session cleared.")
+            time.sleep(1)
+            st.rerun()
+
+    # --- CONDITIONAL UI DISPLAY ---
+    if not uploaded_file:
+        display_empty_state()
+        return
+
+    if uploaded_file:
+        with st.expander("📊 **View Data Preview**", expanded=False):
+            uploaded_file.seek(0)
+            df_preview = pd.read_csv(uploaded_file, nrows=100) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file, nrows=100)
+            st.dataframe(df_preview, use_container_width=True)
+
+    # --- MAIN PIPELINE LOGIC ---
+    if start_button:
+        if not instructions:
+            st.warning("Please describe your analysis goal before starting.")
             return
 
-        st.session_state.pipeline_started = True
+        cleanup_session_files()
+        st.session_state.temp_dir_path = tempfile.mkdtemp().replace('\\', '/')
+        temp_file_path = os.path.join(st.session_state.temp_dir_path, uploaded_file.name).replace('\\', '/')
         
-        # Define temporary directories that will be cleaned up
-        temp_dir = "temp_data"
-        viz_dir = "visualizations"
-
+        final_report, image_paths = None, []
+        
         try:
-            # --- Setup Temporary Environment ---
-            # Clean up old directories first to ensure a fresh start
-            if os.path.exists(viz_dir):
-                shutil.rmtree(viz_dir)
-            
-            os.makedirs(temp_dir, exist_ok=True)
-            os.makedirs(viz_dir, exist_ok=True)
-            
-            uploaded_file.seek(0)
-            file_path = os.path.join(temp_dir, uploaded_file.name)
-            with open(file_path, "wb") as f:
+            with open(temp_file_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
 
-            with output_container:
-                status_area = st.empty()
-
-                # --- STAGE 1: DATA CLEANING PIPELINE ---
-                status_area.info("🚀 **Stage 1/3: Data Cleaning Agent is activating...**")
+            log_container = st.container()
+            with log_container:
+                st.subheader("🤖 Agent Status Log")
+                status_log = st.empty()
+                log_messages = ["[INITIALIZING] Pipeline started..."]
+                status_log.markdown(f"<div class='status-log'>{'<br>'.join(log_messages)}</div>", unsafe_allow_html=True)
                 
-                cleaner_agent = DataAnalystAgent()
-                graph = StateGraph(AgentStateModel)
-                graph.add_node("supervisor", cleaner_agent.supervisor_node)
-                graph.add_node("PreprocessingPlanner_node", cleaner_agent.PreprocessingPlanner_node)
-                graph.add_node("Cleaner_node", cleaner_agent.Cleaner_node)
-                graph.add_edge(START, "supervisor")
-                cleaning_app = graph.compile()
-                
-                initial_state = AgentStateModel(
-                    Instructions=instructions, Path=file_path, messages=[], Analysis=[], next="", current_reasoning=""
-                )
-
-                with st.spinner("Agent is analyzing and processing the data... This may take a moment."):
+                # --- STAGE 1: DATA CLEANING (Sequential) ---
+                log_messages.append("🚀 **Stage 1/3:** Data Cleaning Agent activated...")
+                status_log.markdown(f"<div class='status-log'>{'<br>'.join(log_messages)}</div>", unsafe_allow_html=True)
+                with st.spinner("Agent is analyzing and cleaning the data..."):
+                    # +++ FIX: RESTORED FULL AGENT INVOCATION LOGIC +++
+                    cleaner_agent = DataAnalystAgent()
+                    graph = StateGraph(AgentStateModel)
+                    graph.add_node("supervisor", cleaner_agent.supervisor_node)
+                    graph.add_node("PreprocessingPlanner_node", cleaner_agent.PreprocessingPlanner_node)
+                    graph.add_node("Cleaner_node", cleaner_agent.Cleaner_node)
+                    graph.add_edge(START, "supervisor")
+                    # NOTE: You may need to add your specific conditional edges back if your graph requires them
+                    cleaning_app = graph.compile()
+                    initial_state = AgentStateModel(Instructions=instructions, Path=temp_file_path, messages=[], Analysis=[])
+                    
                     final_cleaning_state = cleaning_app.invoke(initial_state)
 
-                if final_cleaning_state.get('next') != END:
-                    status_area.error("❗️ **Data Cleaning Failed.** The agent could not process the file. Please check your instructions or data format.")
-                    return
+                    if final_cleaning_state.get('next') != END:
+                        st.error("❗️ **Data Cleaning Failed.** Please check instructions or data.")
+                        cleanup_session_files()
+                        return
                 
+                log_messages.append("✅ **Stage 1/3:** Data Cleaning Complete!")
+                status_log.markdown(f"<div class='status-log'>{'<br>'.join(log_messages)}</div>", unsafe_allow_html=True)
                 st.balloons()
-                status_area.success("✅ **Stage 1/3: Data Cleaning Complete!**")
-                time.sleep(2)
-
-                # --- STAGE 2: REPORTING PIPELINE ---
-                status_area.info("🚀 **Stage 2/3: Reporting Agent is drafting the analysis...**")
-                with st.spinner("Generating a comprehensive business report..."):
-                    report_result = Report_agent(df_path=file_path)
-                final_report = report_result.get("output", "Could not extract the final report.")
-                status_area.success("✅ **Stage 2/3: Business Report Generated!**")
-                time.sleep(2)
-
-                # --- STAGE 3: VISUALIZATION PIPELINE ---
-                status_area.info("🚀 **Stage 3/3: Visualization Agent is creating plots...**")
-                with st.spinner("Creating insightful charts and graphs... This can be resource-intensive."):
-                    viz_result = Visualizer_agent(df_path=file_path)
-                viz_report_text = viz_result.get("output", "Could not extract visualization report.")
-                status_area.success("✅ **Stage 3/3: Visualizations Created!**")
-                time.sleep(2)
                 
-                status_area.success("🎉 **Pipeline Complete!** Your analysis is ready below.")
+                # --- STAGES 2 & 3 in PARALLEL ---
+                log_messages.append("🚀 **Stages 2 & 3:** Reporting and Visualization agents working in parallel...")
+                status_log.markdown(f"<div class='status-log'>{'<br>'.join(log_messages)}</div>", unsafe_allow_html=True)
+                with st.spinner("AI agents are working simultaneously to generate reports and plots..."):
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        report_future = executor.submit(Report_agent, df_path=temp_file_path)
+                        viz_future = executor.submit(Visualizer_agent, df_path=temp_file_path, output_dir=st.session_state.temp_dir_path)
+                        report_result = report_future.result()
+                        viz_result = viz_future.result()
+                        final_report = report_result.get("output", "Could not extract report.")
+                        image_paths = viz_result.get("paths", [])
 
-                # --- Display Final Outputs ---
-                report_tab, viz_tab = st.tabs(["📈 Business Report", "📊 Visualizations"])
-
-                with report_tab:
-                    st.markdown(final_report)
-
-                with viz_tab:
-                    st.header("Generated Visualizations")
-                    st.markdown("Each visualization is generated by the AI agent to highlight key trends, distributions, and comparisons in your data.")
-
-                    # --- MODIFIED VISUALIZATION DISPLAY LOGIC ---
-                    # Use a robust regex to find all file paths mentioned in the report
-                    image_paths = re.findall(r"\(File:\s*(visualizations/[^)]+)\)", viz_report_text)
-
-                    if not image_paths:
-                        st.warning("The agent did not return any valid image paths. Displaying its raw output for debugging:")
-                        st.text(viz_report_text)
-                    else:
-                        st.success(f"Successfully found {len(image_paths)} plots to display.")
-                        
-                        # Create columns for a grid layout, 2 plots per row
-                        cols = st.columns(2)
-                        col_idx = 0
-
-                        for img_path in image_paths:
-                            clean_img_path = img_path.strip().replace("\\", "/")
-                            
-                            with cols[col_idx % 2]:
-                                if os.path.exists(clean_img_path):
-                                    # Create a simple, clean title from the filename
-                                    filename = os.path.basename(clean_img_path)
-                                    title = filename.replace('_', ' ').replace('.png', '').title()
-                                    
-                                    with st.container(border=True):
-                                        st.subheader(title)
-                                        st.image(clean_img_path, use_column_width=True)
-                                        st.caption(f"File: `{clean_img_path}`")
-                                else:
-                                    st.warning(f"Plot Not Found")
-                                    st.error(f"The agent specified a plot at `{clean_img_path}`, but the file was not found on disk.")
-                            
-                            col_idx += 1
-
+                log_messages.append("✅ **Stages 2 & 3:** Report and Visualizations Complete!")
+                log_messages.append("🎉 **Pipeline Complete!** Displaying results below.")
+                status_log.markdown(f"<div class='status-log'>{'<br>'.join(log_messages)}</div>", unsafe_allow_html=True)
 
         except Exception as e:
-            st.error("An unexpected pipeline error occurred. Please see the details below.")
+            st.error("An unexpected pipeline error occurred.")
             st.code(traceback.format_exc())
-            
-        finally:
-            # --- AGGRESSIVE CLEANUP ---
-            if os.path.exists(temp_dir):
-                shutil.rmtree(temp_dir)
-            if os.path.exists(viz_dir):
-                shutil.rmtree(viz_dir)
-            
-            st.info("🧹 Temporary session files have been cleaned up.")
-            st.session_state.pipeline_started = False
+            cleanup_session_files()
+            return
+        
+        # --- DISPLAY RESULTS ---
+        st.write("---")
+        if final_report:
+            with st.container(border=True):
+                st.subheader("📈 Business Report")
+                st.markdown(final_report)
+        st.write("")
+        if image_paths:
+            st.subheader("📊 Generated Visualizations")
+            for img_path in image_paths:
+                with st.container(border=True):
+                    filename = os.path.basename(img_path)
+                    title = filename.replace('_', ' ').replace('.png', '').title()
+                    st.subheader(title)
+                    base64_image = get_image_as_base64(img_path)
+                    st.markdown(f'<img src="data:image/png;base64,{base64_image}" style="width: 100%;">', unsafe_allow_html=True)
+                    st.caption(f"File: {filename} (temporary)")
+                st.write("")
+        else:
+            st.warning("The visualization agent did not generate any valid image paths.")
 
 if __name__ == "__main__":
     main()

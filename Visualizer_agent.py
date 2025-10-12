@@ -1,14 +1,18 @@
 from dotenv import load_dotenv
-from Toolkit.Tools import eda_fact_sheet,python_repl_ast
+from Toolkit.Tools import eda_fact_sheet, python_repl_ast
 from llm import llm_model
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.agents import AgentExecutor, create_tool_calling_agent
-from Prompts import Visualizer_prompt
 import time
+import re  # +++ IMPORTED for parsing file paths
+import os  # +++ IMPORTED to verify file paths
 
 load_dotenv()
 
-def Visualizer_agent(df_path: str):
+from Prompts import Visualizer_prompt
+
+# +++ MODIFIED function signature to accept output_dir +++
+def Visualizer_agent(df_path: str, output_dir: str):
 
     system_prompt = ChatPromptTemplate.from_messages(
         [
@@ -18,76 +22,102 @@ def Visualizer_agent(df_path: str):
                 "The csv is in this path : {df_path}. Use the tool first, then reason about the factsheet and decide the impactful visual plots can be made from the data."
                 "Use the python_repl_ast tool to perform the plots and output 5-7 meaningful plots from the data."
             ),
-            ("placeholder", "{chat_history}"),
+            # Chat history is not used in the invoke call, can be removed for simplicity
+            # ("placeholder", "{chat_history}"),
             ("human", "{input}"),
             MessagesPlaceholder(variable_name="agent_scratchpad")        
-    
         ]
     )
 
+    # +++ MODIFIED task_prompt to include the output directory instruction +++
     task_prompt = (
-            f"follow this {Visualizer_prompt} to the letter and access the data from here {df_path}"
+            f"Follow this {Visualizer_prompt} to the letter. Access the data from the path '{df_path}'. "
+            f"You MUST save all generated plot files into this specific directory: '{output_dir}'. "
+            "This path is also available as the `output_dir` variable inside the python tool."
         )
 
     visualizer_agent = create_tool_calling_agent(
                 llm=llm_model,
-                tools=[eda_fact_sheet,python_repl_ast],
+                tools=[eda_fact_sheet, python_repl_ast],
                 prompt=system_prompt
             )
 
+    # +++ MODIFIED AgentExecutor to pass the output_dir to the python tool's environment +++
+    # This makes the `output_dir` variable available inside the executed python code
     agent_executor = AgentExecutor(
                 agent=visualizer_agent,
-                tools=[eda_fact_sheet,python_repl_ast],
+                tools=[eda_fact_sheet, python_repl_ast],
                 verbose=True,
                 handle_parsing_errors=True,
-                return_intermediate_steps=True
+                # return_intermediate_steps=True # Not strictly needed for the final output
+                tool_run_kwargs={"tool_input": {"output_dir": output_dir}}
             )
 
     max_attempts = 3
     attempt = 0
 
-    # --- Execution loop with retry logic ---
     while attempt < max_attempts:
         attempt += 1
         print(f"--- Starting Visualization Generation, Attempt {attempt} of {max_attempts} ---")
 
         try:
-            # 1. Invoke the agent
             result = agent_executor.invoke({
                 "input": task_prompt,
                 "df_path": df_path,
-                "chat_history": []
+                # "chat_history": [] # Not used
             })
 
-            # 2. Check for a valid, non-empty output
-            if result and "output" in result and result["output"]:
-                print(f"--- Visualization Generation successful on Attempt {attempt} ---")
-                return result  # Return the entire successful result dictionary
-            else:
-                # Handle cases where the agent runs but produces no meaningful output
+            if not result or "output" not in result or not result["output"]:
                 raise ValueError("Agent executed successfully but produced an empty or invalid output.")
+            
+            # +++ NEW: Post-processing and path extraction logic +++
+            final_report_text = result["output"]
+            print("--- Agent finished. Parsing final report for file paths. ---")
+
+            # Use regex to robustly find all file paths in the format (File: ...)
+            # This handles whitespace and variations. It captures the path inside the parentheses.
+            image_paths = re.findall(r"\(File:\s*([^)]+)\)", final_report_text)
+            
+            if not image_paths:
+                # If no paths are found, it might be an error or a different output format.
+                # We raise this as a failure for the retry logic.
+                raise ValueError("No file paths in the format (File: ...) were found in the final report.")
+
+            # Clean up paths (remove leading/trailing spaces) and verify they actually exist
+            verified_paths = []
+            for path in image_paths:
+                clean_path = path.strip()
+                if os.path.exists(clean_path):
+                    verified_paths.append(clean_path)
+                else:
+                    print(f"Warning: Agent reported path '{clean_path}', but it was not found on disk.")
+            
+            if not verified_paths:
+                raise ValueError("Agent reported file paths, but none of them could be verified on the filesystem.")
+
+            print(f"--- Successfully found and verified {len(verified_paths)} plot files. ---")
+            
+            # Return a structured dictionary with the report and the clean list of paths
+            return {"report": final_report_text, "paths": verified_paths}
 
         except Exception as e:
-            # 3. On failure, create a detailed error message for the next attempt
             error_msg = (
-                f"Attempt {attempt} failed with the following error: {str(e)}. "
-                f"Please carefully analyze the error and your previous steps, then try again. "
-                "Remember your process: first call `eda_fact_sheet`, then use `python_repl_ast` to generate and save the plots."
+                f"Attempt {attempt} failed: {str(e)}. "
+                "Please analyze the error and retry. Ensure your final output is a markdown report "
+                "containing file paths in the format `(File: /absolute/path/to/plot.png)`."
             )
-            print(f"--- Runtime error encountered ---\n{error_msg}")
-
-            # 4. Prepend the error to the prompt for the next retry, giving the agent context
+            print(f"--- Runtime error or parsing failure ---\n{error_msg}")
+            
             task_prompt = (
                 f"Your previous attempt failed with this error: {error_msg}. "
-                f"Please correct your approach and retry. Here is the original task:\n---\n{task_prompt}"
+                f"Please correct your approach. Original task:\n---\n{Visualizer_prompt}"
             )
-            
-            time.sleep(5)  # Optional delay to prevent rapid-fire retries
+            time.sleep(3)
 
-    # 5. If all attempts fail, return a final error message (fallback)
+    # Fallback if all attempts fail
     error_message = (
-        f"Error: Visualizer agent failed to generate plots for the dataset at '{df_path}' "
-        f"after {max_attempts} attempts. Please check the data and agent configuration."
+        f"Error: Visualizer agent failed to generate and verify plots after {max_attempts} attempts."
     )
     print(error_message)
-    return {"error": error_message, "output": "Failed to generate visualizations."}
+    # Return a consistent dictionary format on failure
+    return {"report": error_message, "paths": []}
