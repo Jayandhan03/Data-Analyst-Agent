@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -23,15 +25,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install huggingface-hub
 
-      - name: Push to Hugging Face Space
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      - name: Configure Git
         run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
 
-          # Add HF as authenticated remote
-          git remote add hf "https://user:$HF_TOKEN@huggingface.co/spaces/Jayandhan/Analyst_agent"
-
-          # Push current branch to HF Space main branch
+      - name: Push to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git remote add hf "https://user:${HF_TOKEN}@huggingface.co/spaces/Jayandhan/Analyst_agent"
           git push hf HEAD:main --force
