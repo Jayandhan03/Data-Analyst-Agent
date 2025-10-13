@@ -1,12 +1,15 @@
 ---
-title: My Awesome App
-emoji: "🚀"
-colorFrom: blue
-colorTo: green
-sdk: streamlit
-sdk_version: "1.24.1"
-app_file: app.py
-pinned: false
+title: Analyst Agent             # Display title
+emoji: "🦁"                     # Optional emoji
+colorFrom: "yellow"              # Gradient start color
+colorTo: "orange"                # Gradient end color
+sdk: streamlit                   # Streamlit, Gradio, Docker, or static
+sdk_version: "1.24.1"            # Version of Streamlit
+app_file: app.py                 # Main app file
+pinned: false                    # Optional
+python_version: "3.11"           # Optional, default is 3.10
+suggested_hardware: "cpu-basic"  # Optional
+suggested_storage: "small"       # Optional
 ---
 
 
