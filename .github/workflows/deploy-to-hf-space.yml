@@ -23,16 +23,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install huggingface-hub
 
-      - name: Authenticate with Hugging Face
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          huggingface-cli login --token "$HF_TOKEN"
-
       - name: Push to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          # Force push to the space repo
-          git remote add hf "https://huggingface.co/spaces/Jayandhan/Analyst_agent"
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+
+          # Add HF as authenticated remote
+          git remote add hf "https://user:$HF_TOKEN@huggingface.co/spaces/Jayandhan/Analyst_agent"
+
+          # Push current branch to HF Space main branch
           git push hf HEAD:main --force
