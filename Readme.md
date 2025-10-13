@@ -1,15 +1,13 @@
 ---
-title: "Analyst Agent"
-emoji: "🦁"
-colorFrom: "yellow"
-colorTo: "orange"
-sdk: "streamlit"
+title: Analyst Agent
+emoji: 🦁
+colorFrom: yellow
+colorTo: orange
+sdk: streamlit
 sdk_version: "1.24.1"
-app_file: "app.py"
+app_file: app.py
 pinned: false
 python_version: "3.11"
-suggested_hardware: "cpu-basic"
-suggested_storage: "small"
 ---
 
 
