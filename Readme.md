@@ -1,5 +1,14 @@
-1)API key -AIzaSyB5JdNGdITOQ1jdHsR0kNf2NVShB5IdO-A
-2)api key - AIzaSyBNJgaYFwkZ1cPPKHu6193DqeX3x-k7rjk
+---
+title: My Awesome App        # Name of your Space
+emoji: "🚀"                  # Optional emoji
+colorFrom: "blue"            # Primary color
+colorTo: "green"             # Secondary color
+sdk: "streamlit"             # Choose: streamlit, gradio, or static
+sdk_version: "1.24.1"        # Streamlit or Gradio version
+app_file: app.py             # Main entry point
+pinned: false                # Optional: pin Space in your profile
+---
+
 
 Project Success Metrics: The Autonomous AI Data Analyst
 
