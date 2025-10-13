@@ -1,12 +1,12 @@
 ---
-title: My Awesome App        # Name of your Space
-emoji: "🚀"                  # Optional emoji
-colorFrom: "blue"            # Primary color
-colorTo: "green"             # Secondary color
-sdk: "streamlit"             # Choose: streamlit, gradio, or static
-sdk_version: "1.24.1"        # Streamlit or Gradio version
-app_file: app.py             # Main entry point
-pinned: false                # Optional: pin Space in your profile
+title: My Awesome App
+emoji: "🚀"
+colorFrom: blue
+colorTo: green
+sdk: streamlit
+sdk_version: "1.24.1"
+app_file: app.py
+pinned: false
 ---
 
 
