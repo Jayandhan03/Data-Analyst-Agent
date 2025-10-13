@@ -1,19 +1,20 @@
 ---
-title: Analyst Agent             # Display title
-emoji: "🦁"                     # Optional emoji
-colorFrom: "yellow"              # Gradient start color
-colorTo: "orange"                # Gradient end color
-sdk: streamlit                   # Streamlit, Gradio, Docker, or static
-sdk_version: "1.24.1"            # Version of Streamlit
-app_file: app.py                 # Main app file
-pinned: false                    # Optional
-python_version: "3.11"           # Optional, default is 3.10
-suggested_hardware: "cpu-basic"  # Optional
-suggested_storage: "small"       # Optional
+title: "Analyst Agent"
+emoji: "🦁"
+colorFrom: "yellow"
+colorTo: "orange"
+sdk: "streamlit"
+sdk_version: "1.24.1"
+app_file: "app.py"
+pinned: false
+python_version: "3.11"
+suggested_hardware: "cpu-basic"
+suggested_storage: "small"
 ---
 
 
-Project Success Metrics: The Autonomous AI Data Analyst
+
+# Project Success Metrics: The Autonomous AI Data Analyst
 
 The primary goal of this project is to create an autonomous agent that can reliably replicate the workflow of a junior data analyst, transforming a raw dataset into a strategic business report with minimal human intervention.
 
