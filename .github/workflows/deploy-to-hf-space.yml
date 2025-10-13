@@ -4,16 +4,17 @@ on:
   push:
     branches:
       - master
+  
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      # 1. Check out the code from your GitHub repository (updated to v4)
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Push the code to your Hugging Face Space (updated to main)
       - name: Push to Hugging Face Hub
         uses: huggingface/hub-action@main
         with:
