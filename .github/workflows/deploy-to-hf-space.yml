@@ -1,22 +1,25 @@
 name: Deploy Streamlit App to Hugging Face Spaces
 
 on:
+  # This makes the action run automatically when you push to the master branch
   push:
     branches:
       - master
   
-  # Allows you to run this workflow manually from the Actions tab
+  # This allows you to run the workflow manually from the Actions tab
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      # 1. Check out the code from your GitHub repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 2. Push the code to your Hugging Face Space using the correct action
       - name: Push to Hugging Face Hub
-        uses: huggingface/hub@main
+        uses: huggingface/hub-action@main
         with:
           repo_id: Jayandhan/Analyst_agent
           repo_type: space
