@@ -9,3 +9,5 @@ seaborn
 playwright
 fpdf
 reportlab
+streamlit
+openpyxl
