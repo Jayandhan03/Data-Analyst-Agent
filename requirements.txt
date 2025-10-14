@@ -11,3 +11,5 @@ fpdf
 reportlab
 streamlit
 openpyxl
+python-dotenv
+requests
