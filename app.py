@@ -7,14 +7,14 @@ import traceback
 import shutil
 import tempfile
 import base64
-import concurrent.futures
+import asyncio  # Import asyncio
 
 from langgraph.graph import START, StateGraph, END
 
 # --- Import Agent Logic ---
 from Cleaner_Agent import DataAnalystAgent, AgentStateModel
-from Report_agent import Report_agent
-from Visualizer_agent import Visualizer_agent
+from Report_agent import Report_agent  # Now async
+from Visualizer_agent import Visualizer_agent  # Now async
 
 # --- Matplotlib Backend Fix ---
 import matplotlib
@@ -124,6 +124,22 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+# --- ASYNC HELPER FUNCTION ---
+async def run_report_and_viz_agents(df_path: str, output_dir: str):
+    """
+    Runs the Report and Visualizer agents concurrently.
+    """
+    report_task = Report_agent(df_path=df_path)
+    viz_task = Visualizer_agent(df_path=df_path, output_dir=output_dir)
+
+    # asyncio.gather runs both awaitable tasks in parallel
+    results = await asyncio.gather(report_task, viz_task)
+    
+    report_result = results[0]
+    viz_result = results[1]
+
+    return report_result, viz_result
+
 # --- HELPER FUNCTIONS ---
 def cleanup_session_files():
     """Deletes the temporary directory and clears associated session state keys."""
@@ -217,14 +233,12 @@ def main():
                 log_messages.append("🚀 **Stage 1/3:** Data Cleaning Agent activated...")
                 status_log.markdown(f"<div class='status-log'>{'<br>'.join(log_messages)}</div>", unsafe_allow_html=True)
                 with st.spinner("Agent is analyzing and cleaning the data..."):
-                    # +++ FIX: RESTORED FULL AGENT INVOCATION LOGIC +++
                     cleaner_agent = DataAnalystAgent()
                     graph = StateGraph(AgentStateModel)
                     graph.add_node("supervisor", cleaner_agent.supervisor_node)
                     graph.add_node("PreprocessingPlanner_node", cleaner_agent.PreprocessingPlanner_node)
                     graph.add_node("Cleaner_node", cleaner_agent.Cleaner_node)
                     graph.add_edge(START, "supervisor")
-                    # NOTE: You may need to add your specific conditional edges back if your graph requires them
                     cleaning_app = graph.compile()
                     initial_state = AgentStateModel(Instructions=instructions, Path=temp_file_path, messages=[], Analysis=[])
                     
@@ -243,13 +257,14 @@ def main():
                 log_messages.append("🚀 **Stages 2 & 3:** Reporting and Visualization agents working in parallel...")
                 status_log.markdown(f"<div class='status-log'>{'<br>'.join(log_messages)}</div>", unsafe_allow_html=True)
                 with st.spinner("AI agents are working simultaneously to generate reports and plots..."):
-                    with concurrent.futures.ThreadPoolExecutor() as executor:
-                        report_future = executor.submit(Report_agent, df_path=temp_file_path)
-                        viz_future = executor.submit(Visualizer_agent, df_path=temp_file_path, output_dir=st.session_state.temp_dir_path)
-                        report_result = report_future.result()
-                        viz_result = viz_future.result()
-                        final_report = report_result.get("output", "Could not extract report.")
-                        image_paths = viz_result.get("paths", [])
+                    # Use asyncio.run() to execute the async function and wait for its result
+                    report_result, viz_result = asyncio.run(run_report_and_viz_agents(
+                        df_path=temp_file_path,
+                        output_dir=st.session_state.temp_dir_path
+                    ))
+                    
+                    final_report = report_result.get("output", "Could not extract report.")
+                    image_paths = viz_result.get("paths", [])
 
                 log_messages.append("✅ **Stages 2 & 3:** Report and Visualizations Complete!")
                 log_messages.append("🎉 **Pipeline Complete!** Displaying results below.")
