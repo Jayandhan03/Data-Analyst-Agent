@@ -1,14 +1,13 @@
 ---
-title: Analyst Agent
-emoji: 🚀
-colorFrom: red
-colorTo: red
-sdk: docker
-app_port: 8501
-tags:
-- streamlit
+title: HR Assistant Bot
+emoji: 🤖
+colorFrom: green
+colorTo: blue
+sdk: streamlit
+sdk_version: "1.26.0"
+app_file: app.py
 pinned: false
-short_description: Streamlit template space
+# to run locally: python -m streamlit run app.py
 ---
 
 # Welcome to Streamlit!
