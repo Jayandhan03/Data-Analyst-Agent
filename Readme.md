@@ -26,7 +26,7 @@ All orchestrated by a **Supervisor Agent** that reasons, routes tasks, and manag
 The system is powered by **LangGraph** for structured agent orchestration and **LangChain** for memory, tools, and reasoning chains.
 
 ### 🖼️ Architecture Diagram  
-![Architecture](./assets/architecture.png)
+![Architecture](https://github.com/user-attachments/assets/bd8470fa-8771-41d0-86d9-301902ba95fb)
 
 
 ---
@@ -126,4 +126,5 @@ AI Engineer | Agentic Systems Developer | Polymath
 
 🏷️ Tags
 #LangGraph #LangChain #GenAI #DataAnalysis #Automation #AIEngineering #Streamlit #GeminiAPI #JayandhanS
+
 
