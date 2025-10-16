@@ -59,31 +59,6 @@ The system is powered by **LangGraph** for structured agent orchestration and **
 - Creates visual plots to communicate business intelligence effectively  
 
 ---
-
-## 🧠 Agentic Workflow (Mermaid Diagram)
-
-```mermaid
-flowchart TD
-    A[🧠 Supervisor Agent]:::supervisor
-    A -->|Understands dataset & defines roadmap| B[🧩 Preprocessor Planner Agent]
-
-    B -->|Creates preprocessing strategy| C[🧼 Cleaner Agent]
-    C -->|Cleans data batchwise & performs self-validation| D[📊 Report Agent]
-    D -->|Analyzes business cases, patterns & opportunities| E[📈 Visualizer Agent]
-    E -->|Produces stunning visuals & summary| F[(📁 Final Deliverables: Clean Data + Report + Visuals)]
-
-    F -.->|Context feedback for adaptive reasoning| A
-    C -.->|Validation feedback| A
-    D -.->|Insight refinement feedback| A
-
-    classDef supervisor fill:#f5b700,stroke:#000,color:#000,fontWeight:bold
-    classDef agent fill:#1abc9c,stroke:#0b5345,color:#fff,fontWeight:bold
-    classDef output fill:#34495e,stroke:#000,color:#fff,fontWeight:bold
-    classDef default fill:#ffffff,stroke:#000,color:#000,fontWeight:bold
-
-    class A supervisor
-    class B,C,D,E agent
-    class F output
 🧩 Tech Stack
 Layer	Technology
 Agent Orchestration	🧭 LangGraph
@@ -126,5 +101,6 @@ AI Engineer | Agentic Systems Developer | Polymath
 
 🏷️ Tags
 #LangGraph #LangChain #GenAI #DataAnalysis #Automation #AIEngineering #Streamlit #GeminiAPI #JayandhanS
+
 
 
