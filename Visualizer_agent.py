@@ -3,7 +3,7 @@ from Toolkit.Tools import eda_fact_sheet, python_repl_ast
 from llm import llm_model
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.agents import AgentExecutor, create_tool_calling_agent
-import asyncio  # Import asyncio
+import time
 import re
 import os
 
@@ -11,9 +11,9 @@ load_dotenv()
 
 from Prompts import Visualizer_prompt
 
-async def Visualizer_agent(df_path: str, output_dir: str):
+def Visualizer_agent(df_path: str, output_dir: str):
     """
-    Asynchronous agent that generates and saves data visualizations.
+    synchronous agent that generates and saves data visualizations.
     """
     system_prompt = ChatPromptTemplate.from_messages(
         [
@@ -57,7 +57,7 @@ async def Visualizer_agent(df_path: str, output_dir: str):
 
         try:
             # Use the asynchronous 'ainvoke' method
-            result = await agent_executor.ainvoke({
+            result = agent_executor.invoke({
                 "input": task_prompt,
                 "df_path": df_path,
             })
@@ -102,7 +102,7 @@ async def Visualizer_agent(df_path: str, output_dir: str):
             )
             
             # Use the asynchronous 'sleep'
-            await asyncio.sleep(3)
+            time.sleep(3)
 
     error_message = (
         f"Error: Visualizer agent failed to generate and verify plots after {max_attempts} attempts."

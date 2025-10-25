@@ -4,13 +4,13 @@ from llm import llm_model
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from Prompts import Reporter_prompt
-import asyncio  # Import asyncio
+import time  # Import the time module for synchronous sleep
 
 load_dotenv()
 
-async def Report_agent(df_path: str):
+def Report_agent(df_path: str):
     """
-    Asynchronous agent that generates a business report from a dataset.
+    Synchronous agent that generates a business report from a dataset.
     """
     system_prompt = ChatPromptTemplate.from_messages(
         [
@@ -53,8 +53,8 @@ async def Report_agent(df_path: str):
         print(f"--- Starting Report Generation, Attempt {attempt} of {max_attempts} ---")
 
         try:
-            # Use the asynchronous 'ainvoke' method
-            result = await agent_executor.ainvoke({
+            # Use the synchronous 'invoke' method
+            result = agent_executor.invoke({
                 "input": task_prompt,
                 "df_path": df_path,
                 "chat_history": []
@@ -79,8 +79,8 @@ async def Report_agent(df_path: str):
                 f"Please correct your approach and try again. Here is the original task:\n---\n{task_prompt}"
             )
             
-            # Use the asynchronous 'sleep'
-            await asyncio.sleep(5)
+            # Use the synchronous 'sleep'
+            time.sleep(5)
 
     error_message = f"Error: Report agent failed to generate a report for the dataset at '{df_path}' after {max_attempts} attempts. Please check the data and agent configuration."
     print(error_message)

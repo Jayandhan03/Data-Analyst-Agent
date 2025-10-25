@@ -7,14 +7,14 @@ import traceback
 import shutil
 import tempfile
 import base64
-import asyncio  # Import asyncio
 
 from langgraph.graph import START, StateGraph, END
 
 # --- Import Agent Logic ---
+# These are now assumed to be synchronous functions
 from Cleaner_Agent import DataAnalystAgent, AgentStateModel
-from Report_agent import Report_agent  # Now async
-from Visualizer_agent import Visualizer_agent  # Now async
+from Report_agent import Report_agent
+from Visualizer_agent import Visualizer_agent
 
 # --- Matplotlib Backend Fix ---
 import matplotlib
@@ -124,19 +124,16 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# --- ASYNC HELPER FUNCTION ---
-async def run_report_and_viz_agents(df_path: str, output_dir: str):
+# --- SYNC HELPER FUNCTION ---
+def run_report_and_viz_agents(df_path: str, output_dir: str):
     """
-    Runs the Report and Visualizer agents concurrently.
+    Runs the Report and Visualizer agents sequentially.
     """
-    report_task = Report_agent(df_path=df_path)
-    viz_task = Visualizer_agent(df_path=df_path, output_dir=output_dir)
-
-    # asyncio.gather runs both awaitable tasks in parallel
-    results = await asyncio.gather(report_task, viz_task)
+    # Run the report agent and wait for it to complete
+    report_result = Report_agent(df_path=df_path)
     
-    report_result = results[0]
-    viz_result = results[1]
+    # Then, run the visualization agent and wait for it to complete
+    viz_result = Visualizer_agent(df_path=df_path, output_dir=output_dir)
 
     return report_result, viz_result
 
@@ -253,15 +250,15 @@ def main():
                 status_log.markdown(f"<div class='status-log'>{'<br>'.join(log_messages)}</div>", unsafe_allow_html=True)
                 st.balloons()
                 
-                # --- STAGES 2 & 3 in PARALLEL ---
-                log_messages.append("🚀 **Stages 2 & 3:** Reporting and Visualization agents working in parallel...")
+                # --- STAGES 2 & 3 in SEQUENCE ---
+                log_messages.append("🚀 **Stages 2 & 3:** Reporting and Visualization agents working sequentially...")
                 status_log.markdown(f"<div class='status-log'>{'<br>'.join(log_messages)}</div>", unsafe_allow_html=True)
-                with st.spinner("AI agents are working simultaneously to generate reports and plots..."):
-                    # Use asyncio.run() to execute the async function and wait for its result
-                    report_result, viz_result = asyncio.run(run_report_and_viz_agents(
+                with st.spinner("AI agents are working to generate reports and plots..."):
+                    # Call the synchronous helper function directly
+                    report_result, viz_result = run_report_and_viz_agents(
                         df_path=temp_file_path,
                         output_dir=st.session_state.temp_dir_path
-                    ))
+                    )
                     
                     final_report = report_result.get("output", "Could not extract report.")
                     image_paths = viz_result.get("paths", [])
