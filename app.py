@@ -1,17 +1,18 @@
+import os
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 import streamlit as st
 import pandas as pd
 import os
 import time
-import re
-import traceback
 import shutil
 import tempfile
 import base64
+import traceback
 
 from langgraph.graph import START, StateGraph, END
 
 # --- Import Agent Logic ---
-# These are now assumed to be synchronous functions
+# Assumes these are synchronous functions returning a dictionary with 'success' and structured data
 from Cleaner_Agent import DataAnalystAgent, AgentStateModel
 from Report_agent import Report_agent
 from Visualizer_agent import Visualizer_agent
@@ -119,7 +120,6 @@ st.markdown("""
         font-family: 'Courier New', Courier, monospace;
         color: #E0E0E0;
     }
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -129,12 +129,8 @@ def run_report_and_viz_agents(df_path: str, output_dir: str):
     """
     Runs the Report and Visualizer agents sequentially.
     """
-    # Run the report agent and wait for it to complete
     report_result = Report_agent(df_path=df_path)
-    
-    # Then, run the visualization agent and wait for it to complete
     viz_result = Visualizer_agent(df_path=df_path, output_dir=output_dir)
-
     return report_result, viz_result
 
 # --- HELPER FUNCTIONS ---
@@ -147,7 +143,12 @@ def cleanup_session_files():
                 shutil.rmtree(temp_dir)
             except Exception as e:
                 print(f"Error removing temp directory {temp_dir}: {e}")
-    keys_to_clear = ['temp_dir_path', 'pipeline_run_complete', 'generated_image_paths', 'final_report']
+    
+    # Extended list of keys to clear for a full reset
+    keys_to_clear = [
+        'temp_dir_path', 'pipeline_run_complete', 
+        'final_report_structured', 'final_visuals_structured'
+    ]
     for key in keys_to_clear:
         st.session_state.pop(key, None)
 
@@ -192,33 +193,38 @@ def main():
             time.sleep(1)
             st.rerun()
 
-    # --- CONDITIONAL UI DISPLAY ---
+    # --- MAIN CONTENT AREA ---
+    # Display empty state if no file is uploaded.
     if not uploaded_file:
         display_empty_state()
         return
 
-    if uploaded_file:
-        with st.expander("📊 **View Data Preview**", expanded=False):
+    # Show data preview if a file is uploaded.
+    with st.expander("📊 **View Data Preview**", expanded=False):
+        try:
             uploaded_file.seek(0)
             df_preview = pd.read_csv(uploaded_file, nrows=100) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file, nrows=100)
             st.dataframe(df_preview, use_container_width=True)
+        except Exception as e:
+            st.error(f"Could not read the file preview. Error: {e}")
 
-    # --- MAIN PIPELINE LOGIC ---
+
+    # --- PIPELINE EXECUTION ---
     if start_button:
         if not instructions:
             st.warning("Please describe your analysis goal before starting.")
             return
 
+        # Clean up previous session and set up a new one
         cleanup_session_files()
         st.session_state.temp_dir_path = tempfile.mkdtemp().replace('\\', '/')
         temp_file_path = os.path.join(st.session_state.temp_dir_path, uploaded_file.name).replace('\\', '/')
-        
-        final_report, image_paths = None, []
         
         try:
             with open(temp_file_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
 
+            # UI container for live logs
             log_container = st.container()
             with log_container:
                 st.subheader("🤖 Agent Status Log")
@@ -226,7 +232,7 @@ def main():
                 log_messages = ["[INITIALIZING] Pipeline started..."]
                 status_log.markdown(f"<div class='status-log'>{'<br>'.join(log_messages)}</div>", unsafe_allow_html=True)
                 
-                # --- STAGE 1: DATA CLEANING (Sequential) ---
+                # --- STAGE 1: DATA CLEANING ---
                 log_messages.append("🚀 **Stage 1/3:** Data Cleaning Agent activated...")
                 status_log.markdown(f"<div class='status-log'>{'<br>'.join(log_messages)}</div>", unsafe_allow_html=True)
                 with st.spinner("Agent is analyzing and cleaning the data..."):
@@ -238,7 +244,6 @@ def main():
                     graph.add_edge(START, "supervisor")
                     cleaning_app = graph.compile()
                     initial_state = AgentStateModel(Instructions=instructions, Path=temp_file_path, messages=[], Analysis=[])
-                    
                     final_cleaning_state = cleaning_app.invoke(initial_state)
 
                     if final_cleaning_state.get('next') != END:
@@ -250,49 +255,108 @@ def main():
                 status_log.markdown(f"<div class='status-log'>{'<br>'.join(log_messages)}</div>", unsafe_allow_html=True)
                 st.balloons()
                 
-                # --- STAGES 2 & 3 in SEQUENCE ---
-                log_messages.append("🚀 **Stages 2 & 3:** Reporting and Visualization agents working sequentially...")
+                # --- STAGES 2 & 3: REPORTING & VISUALIZATION ---
+                log_messages.append("🚀 **Stages 2 & 3:** Reporting and Visualization agents activated...")
                 status_log.markdown(f"<div class='status-log'>{'<br>'.join(log_messages)}</div>", unsafe_allow_html=True)
-                with st.spinner("AI agents are working to generate reports and plots..."):
-                    # Call the synchronous helper function directly
+                with st.spinner("AI agents are generating the report and plots..."):
                     report_result, viz_result = run_report_and_viz_agents(
                         df_path=temp_file_path,
                         output_dir=st.session_state.temp_dir_path
                     )
-                    
-                    final_report = report_result.get("output", "Could not extract report.")
-                    image_paths = viz_result.get("paths", [])
+                
+                # Process and store results in session state
+                if report_result and report_result.get("success"):
+                    st.session_state.final_report_structured = report_result.get("parsed_report")
+                else:
+                    st.error(f"Report generation failed: {report_result.get('error', 'Unknown error')}")
 
-                log_messages.append("✅ **Stages 2 & 3:** Report and Visualizations Complete!")
-                log_messages.append("🎉 **Pipeline Complete!** Displaying results below.")
+                if viz_result and viz_result.get("success"):
+                    st.session_state.final_visuals_structured = viz_result.get("parsed_visuals")
+                else:
+                    st.error(f"Visualization generation failed: {viz_result.get('error', 'Unknown error')}")
+
+                # Final log update
+                if st.session_state.final_report_structured and st.session_state.final_visuals_structured:
+                    log_messages.append("✅ **Stages 2 & 3:** Report and Visualizations Complete!")
+                    log_messages.append("🎉 **Pipeline Complete!** Displaying results below.")
+                    st.session_state.pipeline_run_complete = True
+                else:
+                    log_messages.append("❗️ **PIPELINE FAILED:** One or more agents failed. Check error messages above.")
+                
                 status_log.markdown(f"<div class='status-log'>{'<br>'.join(log_messages)}</div>", unsafe_allow_html=True)
-
+                
         except Exception as e:
             st.error("An unexpected pipeline error occurred.")
             st.code(traceback.format_exc())
             cleanup_session_files()
             return
         
-        # --- DISPLAY RESULTS ---
+        # Rerun to display results from session state
+        st.rerun()
+
+    # --- DISPLAY RESULTS (persisted in session state) ---
+    if st.session_state.get("pipeline_run_complete"):
         st.write("---")
-        if final_report:
+        st.header("✨ Analysis Results")
+
+        # Display the structured report
+        if st.session_state.get("final_report_structured"):
+            report_data = st.session_state.final_report_structured
             with st.container(border=True):
-                st.subheader("📈 Business Report")
-                st.markdown(final_report)
-        st.write("")
-        if image_paths:
-            st.subheader("📊 Generated Visualizations")
-            for img_path in image_paths:
-                with st.container(border=True):
-                    filename = os.path.basename(img_path)
-                    title = filename.replace('_', ' ').replace('.png', '').title()
-                    st.subheader(title)
-                    base64_image = get_image_as_base64(img_path)
-                    st.markdown(f'<img src="data:image/png;base64,{base64_image}" style="width: 100%;">', unsafe_allow_html=True)
-                    st.caption(f"File: {filename} (temporary)")
-                st.write("")
-        else:
-            st.warning("The visualization agent did not generate any valid image paths.")
+                st.subheader(report_data.get("subject", "Business Report"))
+                
+                # Use columns for a better summary layout
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.info("Executive Summary")
+                    st.markdown(report_data.get("executive_summary", "Not available."))
+                with col2:
+                    st.info("💡 Biggest Strategic Opportunity")
+                    st.markdown(report_data.get("strategic_opportunity", "Not available."))
+
+                st.info("🔑 Key Insights & Patterns")
+                st.markdown(report_data.get("key_insights_and_patterns", "Not available."))
+
+                with st.expander("View Full Detailed Report"):
+                    st.markdown("---")
+                    st.subheader("Data Overview and Quality Review")
+                    st.markdown(report_data.get("data_overview_and_quality_review", "Not available."))
+                    st.markdown("---")
+                    st.subheader("Descriptive and Diagnostic Analysis")
+                    st.markdown(report_data.get("descriptive_and_diagnostic_analysis", "Not available."))
+                    st.markdown("---")
+                    st.subheader("Recommendations and Forecast")
+                    st.markdown(report_data.get("recommendations_and_forecast", "Not available."))
+
+        # Display the visualizations
+        if st.session_state.get("final_visuals_structured"):
+            visuals_data = st.session_state.final_visuals_structured
+            st.write("")
+            with st.container(border=True):
+                st.subheader(visuals_data.get("report_title", "Generated Visualizations"))
+                visualizations = visuals_data.get("visualizations", [])
+                
+                if not visualizations:
+                    st.warning("The visualization agent did not return any visuals.")
+                else:
+                    # Create a grid layout for visualizations
+                    cols = st.columns(2)
+                    col_idx = 0
+                    for vis in visualizations:
+                        with cols[col_idx % 2]:
+                            try:
+                                st.subheader(vis.get("title", "Untitled Chart"))
+                                image_path = vis.get("file_path")
+                                if image_path and os.path.exists(image_path):
+                                    st.image(image_path, use_column_width=True)
+                                    st.markdown(f"**Insight:** {vis.get('insight', 'No insight provided.')}")
+                                    st.caption(f"File: {os.path.basename(image_path)}")
+                                    st.write("---")
+                                else:
+                                    st.warning(f"Chart image not found at path: {image_path}")
+                            except Exception as e:
+                                st.error(f"Could not display visual '{vis.get('title')}': {e}")
+                        col_idx += 1
 
 if __name__ == "__main__":
     main()

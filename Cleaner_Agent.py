@@ -157,7 +157,7 @@ class DataAnalystAgent:
         ("human", "{input}"),
         MessagesPlaceholder(variable_name="agent_scratchpad")        
     ])
-        
+       
         Analyzer_agent = create_tool_calling_agent(
             llm=self.llm_model,
             tools=[eda_fact_sheet],
@@ -316,5 +316,4 @@ class DataAnalystAgent:
         }
 
         return Command(update=update_dict, goto="supervisor")
-    
     
