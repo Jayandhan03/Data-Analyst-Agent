@@ -85,9 +85,11 @@ Metric	Impact
 
 🧩 Designed with LangGraph’s structured control flow
 
-🌍 Deployed live on Streamlit Cloud
+🌍 Deployed live on AWS EC2 Cloud
 
 💼 Perfect foundation for enterprise data automation
+
+🧱Acess the app here:http://13.211.143.26:8501/
 
 🎥 Working Demo
 🎬 Watch the full working demo here:
@@ -101,6 +103,7 @@ AI Engineer | Agentic Systems Developer | Polymath
 
 🏷️ Tags
 #LangGraph #LangChain #GenAI #DataAnalysis #Automation #AIEngineering #Streamlit #GeminiAPI #JayandhanS
+
 
 
 
