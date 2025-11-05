@@ -65,7 +65,7 @@ Agent Orchestration	🧭 LangGraph
 LLM Reasoning	💬 Gemini API
 Agent Framework	⚙️ LangChain Agents
 UI Layer	🌐 Streamlit
-Deployment	☁️ Streamlit Cloud
+Deployment	☁️ AWS EC2
 Data Input	📊 CSV / Excel files
 
 📈 Success Metrics
@@ -91,7 +91,7 @@ Metric	Impact
 
 🎥 Working Demo
 🎬 Watch the full working demo here:
-👉 LinkedIn Demo Video (Replace with actual post link)
+👉 LinkedIn Demo Video (https://www.linkedin.com/posts/jayandhanai_ai-langgraph-langchain-activity-7384557987526475776-i8fi?utm_source=share&utm_medium=member_desktop&rcm=ACoAAD_LIKQBWa4s-4TpMZcXIEkSkKnUr-Fv_uo)
 
 🧱 Designed & Engineered By
 👤 Jayandhan S
@@ -101,6 +101,7 @@ AI Engineer | Agentic Systems Developer | Polymath
 
 🏷️ Tags
 #LangGraph #LangChain #GenAI #DataAnalysis #Automation #AIEngineering #Streamlit #GeminiAPI #JayandhanS
+
 
 
 
