@@ -6,7 +6,7 @@ from Cleaner_Agent import DataAnalystAgent, AgentStateModel
 from fastapi import FastAPI, UploadFile, File, HTTPException
 import pandas as pd
 import tempfile
-
+from ChatAgent import Chat_Data_Agent
 from Report_agent import Report_agent 
 
 import uuid
@@ -184,6 +184,53 @@ async def generate_visualizations_endpoint(request: VisualizeRequest):
             "parsed_visuals": None,
             "raw_output": None,
             "error": str(e),
+        }
+    
+
+# ==========================================
+# 4. CHAT WITH DATA ENDPOINT (NEW)
+# ==========================================
+
+class ChatRequest(BaseModel):
+    path: str
+    query: str
+
+class ChatResponse(BaseModel):
+    success: bool
+    response: str | None = None
+    query_processed: str | None = None
+    error: str | None = None
+
+@app.post("/chat-with-data", response_model=ChatResponse)
+async def chat_with_data_endpoint(request: ChatRequest):
+    """
+    Endpoint that allows users to ask free-text questions about their dataset.
+    Uses SQL Agent behind the scenes.
+    """
+    try:
+        print(f"Received chat request. Path: {request.path}, Query: {request.query}")
+
+        # Check if file exists before calling agent
+        if not os.path.exists(request.path):
+            raise HTTPException(status_code=404, detail=f"File not found at {request.path}")
+
+        # Call the Chat Agent
+        result = Chat_Data_Agent(request.path, request.query)
+
+        return {
+            "success": result.get("success", False),
+            "response": result.get("response"),
+            "query_processed": result.get("query_processed"),
+            "error": result.get("error")
+        }
+
+    except Exception as e:
+        print(f"Chat agent error: {e}")
+        return {
+            "success": False,
+            "response": "An internal error occurred while processing the chat request.",
+            "query_processed": request.query,
+            "error": str(e)
         }
     
 
