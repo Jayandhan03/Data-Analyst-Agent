@@ -1,0 +1,36 @@
+# Ignore Python cache and compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore virtual environment
+venv/
+
+# Ignore local environment files
+.env
+
+# Ignore logs, temp files, and DBs
+*.log
+*.db
+*.sqlite3
+
+# Ignore Git and editor configs
+.git
+.gitignore
+.github/
+.vscode/
+
+# Ignore experiment or test folders if not needed in production
+Experiments/
+
+# Ignore Docker-specific files if not needed inside image
+Dockerfile
+.dockerignore
+
+# Optional: ignore large local data files
+*.csv
+*.xlsx
+*.zip
+*.tar
+*.gz
